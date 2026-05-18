@@ -1,0 +1,7 @@
+base_config: base.yaml
+model:
+  backbone: R-50-FPN
+scheduler:
+  preset: 1x
+logging:
+  output_dir: outputs/r50_1x

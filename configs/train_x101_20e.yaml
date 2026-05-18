@@ -1,0 +1,9 @@
+base_config: base.yaml
+model:
+  backbone: X-101-32x4d-FPN
+scheduler:
+  preset: 20e
+training:
+  epochs: 20
+logging:
+  output_dir: outputs/x101_20e

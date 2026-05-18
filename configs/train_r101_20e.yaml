@@ -1,0 +1,9 @@
+base_config: base.yaml
+model:
+  backbone: R-101-FPN
+scheduler:
+  preset: 20e
+training:
+  epochs: 20
+logging:
+  output_dir: outputs/r101_20e
