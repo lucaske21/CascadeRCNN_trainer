@@ -12,6 +12,22 @@ class DALIUnavailableError(RuntimeError):
     pass
 
 
+def _to_absolute_xyxy(
+    normalized_boxes: torch.Tensor,
+    image_width: int,
+    image_height: int,
+) -> torch.Tensor:
+    if normalized_boxes.numel() == 0:
+        return normalized_boxes.to(dtype=torch.float32)
+
+    scale = torch.tensor(
+        [image_width, image_height, image_width, image_height],
+        dtype=normalized_boxes.dtype,
+        device=normalized_boxes.device,
+    )
+    return (normalized_boxes * scale).to(dtype=torch.float32)
+
+
 class DALIDetectionLoader:
     def __init__(self, iterator: Any) -> None:
         self.iterator = iterator
@@ -22,6 +38,7 @@ class DALIDetectionLoader:
             images = data["images"]
             boxes = data["boxes"]
             labels = data["labels"]
+            image_ids = data.get("image_ids")
 
             image_list: List[torch.Tensor] = []
             targets: List[Dict[str, torch.Tensor]] = []
@@ -30,13 +47,24 @@ class DALIDetectionLoader:
                 image_list.append(images[i])
                 sample_boxes = boxes.at(i) if hasattr(boxes, "at") else boxes[i]
                 sample_labels = labels.at(i) if hasattr(labels, "at") else labels[i]
+                sample_image_id = image_ids.at(i) if image_ids is not None and hasattr(image_ids, "at") else (
+                    image_ids[i] if image_ids is not None else i
+                )
+
+                if hasattr(sample_image_id, "item"):
+                    sample_image_id = int(sample_image_id.item())
+                else:
+                    sample_image_id = int(sample_image_id)
+
+                image_height, image_width = int(images[i].shape[-2]), int(images[i].shape[-1])
+                abs_boxes = _to_absolute_xyxy(sample_boxes, image_width=image_width, image_height=image_height)
                 targets.append(
                     {
-                        "boxes": sample_boxes.to(dtype=torch.float32),
+                        "boxes": abs_boxes,
                         "labels": sample_labels.to(dtype=torch.int64).flatten(),
-                        "image_id": torch.tensor([i]),
+                        "image_id": torch.tensor([sample_image_id], dtype=torch.int64),
                         "iscrowd": torch.zeros((sample_labels.shape[0],), dtype=torch.int64, device=sample_labels.device),
-                        "area": (sample_boxes[:, 2] - sample_boxes[:, 0]) * (sample_boxes[:, 3] - sample_boxes[:, 1]),
+                        "area": (abs_boxes[:, 2] - abs_boxes[:, 0]) * (abs_boxes[:, 3] - abs_boxes[:, 1]),
                     }
                 )
             yield image_list, targets
@@ -61,12 +89,13 @@ def create_dali_dataloader(cfg: Dict[str, Any], split: str) -> DALIDetectionLoad
 
     @pipeline_def
     def detection_pipe(image_dir: str, annotation_file: str):
-        images, bboxes, labels = fn.readers.coco(
+        images, bboxes, labels, image_ids = fn.readers.coco(
             file_root=image_dir,
             annotations_file=annotation_file,
             ratio=True,
             ltrb=True,
             random_shuffle=(split == "train"),
+            image_ids=True,
             name="Reader",
         )
         images = fn.decoders.image(images, device="mixed", output_type=types.RGB)
@@ -79,7 +108,7 @@ def create_dali_dataloader(cfg: Dict[str, Any], split: str) -> DALIDetectionLoad
             mean=[0.0, 0.0, 0.0],
             std=[255.0, 255.0, 255.0],
         )
-        return images, bboxes, labels
+        return images, bboxes, labels, image_ids
 
     pipeline = detection_pipe(
         batch_size=batch_size,
@@ -88,7 +117,7 @@ def create_dali_dataloader(cfg: Dict[str, Any], split: str) -> DALIDetectionLoad
         image_dir=dataset_cfg["images"],
         annotation_file=dataset_cfg["annotations"],
     )
-    output_map = ["images", "boxes", "labels"]
+    output_map = ["images", "boxes", "labels", "image_ids"]
     iterator = DALIGenericIterator([pipeline], output_map=output_map, auto_reset=True)
     logger.info("Using NVIDIA DALI data pipeline")
     return DALIDetectionLoader(iterator)
