@@ -39,6 +39,8 @@ class DALIDetectionLoader:
             boxes = data["boxes"]
             labels = data["labels"]
             image_ids = data.get("image_ids")
+            if image_ids is None:
+                raise RuntimeError("DALI pipeline output is missing 'image_ids'")
 
             image_list: List[torch.Tensor] = []
             targets: List[Dict[str, torch.Tensor]] = []
@@ -47,9 +49,7 @@ class DALIDetectionLoader:
                 image_list.append(images[i])
                 sample_boxes = boxes.at(i) if hasattr(boxes, "at") else boxes[i]
                 sample_labels = labels.at(i) if hasattr(labels, "at") else labels[i]
-                sample_image_id = image_ids.at(i) if image_ids is not None and hasattr(image_ids, "at") else (
-                    image_ids[i] if image_ids is not None else i
-                )
+                sample_image_id = image_ids.at(i) if hasattr(image_ids, "at") else image_ids[i]
 
                 if hasattr(sample_image_id, "item"):
                     sample_image_id = int(sample_image_id.item())
