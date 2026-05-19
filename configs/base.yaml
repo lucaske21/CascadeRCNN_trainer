@@ -1,0 +1,59 @@
+dataset:
+  num_classes: 2
+  class_names: ["background", "object"]
+  train:
+    images: /data/train/images
+    annotations: /data/train/annotations.json
+  val:
+    images: /data/val/images
+    annotations: /data/val/annotations.json
+
+model:
+  type: fasterrcnn
+  backbone: R-50-FPN
+  trainable_backbone_layers: 3
+
+optimizer:
+  name: SGD
+  lr: 0.02
+  momentum: 0.9
+  weight_decay: 0.0001
+
+scheduler:
+  preset: 1x
+
+training:
+  batch_size: 2
+  epochs: 12
+  num_workers: 4
+  checkpoint_every: 1
+  resume_from: null
+  device: cuda
+
+augmentation:
+  horizontal_flip_prob: 0.5
+
+logging:
+  output_dir: outputs/default
+  mlflow:
+    enabled: false
+    tracking_uri: null
+    experiment_name: CascadeRCNN_trainer
+    run_name: null
+
+export:
+  onnx:
+    opset: 12
+    input_size: [3, 800, 800]
+    dynamic_batch: true
+    fold_batchnorm: false
+    simplify: false
+    metadata:
+      framework: pytorch
+      task: hbb_detection
+
+dali:
+  enabled: false
+  num_threads: 2
+  device_id: 0
+  image_size: [800, 800]

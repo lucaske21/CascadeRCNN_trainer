@@ -1,0 +1,12 @@
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+
+WORKDIR /workspace
+
+COPY requirements.txt requirements-optional.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENV PYTHONPATH=/workspace
+
+CMD ["python", "-m", "cascadercnn_trainer.train", "--config", "configs/base.yaml"]
