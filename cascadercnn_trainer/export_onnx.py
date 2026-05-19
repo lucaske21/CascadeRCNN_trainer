@@ -19,7 +19,15 @@ class ONNXWrapper(torch.nn.Module):
         self.model = model
 
     def forward(self, images: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        outputs = self.model(list(images))
+        torch._assert(
+            images.ndim == 4,
+            "Expected 'images' to be a 4D tensor shaped [N, C, H, W] for ONNX export.",
+        )
+        torch._assert(
+            images.shape[0] == 1,
+            "ONNX export only supports batch size 1 because detections are returned for a single image.",
+        )
+        outputs = self.model(list(images[:1]))
         first = outputs[0]
         return first["boxes"], first["scores"], first["labels"]
 
